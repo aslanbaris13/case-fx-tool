@@ -10,10 +10,12 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import date as date_type, datetime, timezone
 from decimal import ROUND_HALF_UP, Decimal
 
 import httpx
 
+from app import cache
 from app.errors import FxError
 
 DEFAULT_UPSTREAM_BASE = "https://api.frankfurter.dev"
@@ -56,6 +58,12 @@ async def fetch_rate(
     JSON text, and the date the rate ACTUALLY belongs to (upstream's `date`).
     Any upstream failure is raised as an FxError, never guessed around.
     """
+    key = (from_currency, to_currency, asked_date)
+    cached = cache.get(key)
+    if cached is not None:
+        # Same question already answered — do not ask the upstream again.
+        return cached
+
     base = upstream_base()
     params = {"base": from_currency, "symbols": to_currency}
 
@@ -101,6 +109,12 @@ async def fetch_rate(
                 502, "upstream_bad_response",
                 "The rate provider returned an unreadable response.",
             )
+
+    # Cache only immutable answers: a past date's rate never changes, so we
+    # remember it. Today's rate can still change when the ECB publishes, so we
+    # skip it rather than risk serving a stale number for the rest of the day.
+    if date_type.fromisoformat(asked_date) < datetime.now(timezone.utc).date():
+        cache.set(key, (rate, rate_date))
 
     return rate, rate_date
 
