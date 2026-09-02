@@ -1,0 +1,3 @@
+[tool.pytest.ini_options]
+# Make the repo root importable so tests can `from app.main import app`.
+pythonpath = ["."]

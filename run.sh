@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# Starts the service. It must listen on $PORT (default 8080) and read the
-# upstream base URL from $FX_UPSTREAM_BASE — we point that at a fake upstream
-# when we review your work, so nothing here may hardcode frankfurter.dev.
+# Starts the FX conversion service.
+#   PORT              which port to listen on (default 8080)
+#   FX_UPSTREAM_BASE  upstream base URL (read inside the app; never hardcoded)
 set -euo pipefail
-echo "run.sh is not implemented yet" >&2
-exit 1
+exec uvicorn app.main:app --port "${PORT:-8080}"
