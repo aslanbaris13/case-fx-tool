@@ -34,6 +34,18 @@ async def convert(
     """
     rate, rate_date = await fx.fetch_rate(from_currency, to, date)
     result = fx.convert_amount(amount, rate)
+
+    # Make the "nearest earlier business day" fallback visible to the caller.
+    # The upstream walks back to the last day it has a rate for; when that day
+    # differs from the one asked, the model must be able to tell the customer.
+    is_fallback = rate_date != date
+    note = None
+    if is_fallback:
+        note = (
+            f"No ECB rate was published for {date}; "
+            f"used the most recent rate, from {rate_date}."
+        )
+
     return {
         "amount": float(amount),
         "from": from_currency,
@@ -42,5 +54,7 @@ async def convert(
         "result": float(result),
         "rate_date": rate_date,
         "asked_date": date,
+        "is_fallback": is_fallback,
+        "note": note,
         "source": "ECB via frankfurter.dev",
     }
