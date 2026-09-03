@@ -119,12 +119,39 @@ def test_future_date_rejected_without_upstream(client):
 
 
 @respx.mock
-def test_same_currency_is_identity_without_upstream(client):
+def test_malformed_currency_rejected_without_upstream(client):
+    # No route registered: a malformed code must be refused locally.
+    r = client.get(CONVERT, params={"amount": "250", "from": "EUR", "to": "EUROS", "date": "2020-01-02"})
+    assert r.status_code == 400
+    assert r.json()["error"] == "unknown_currency"
+
+
+@respx.mock
+def test_same_currency_is_identity(client):
+    respx.get(latest()).mock(return_value=ok(today_iso()))      # upstream knows EUR
     r = client.get(CONVERT, params={"amount": "250", "from": "EUR", "to": "EUR", "date": "2020-01-02"})
     body = r.json()
     assert r.status_code == 200
     assert body["rate"] == 1.0
     assert body["result"] == 250.0
+    assert body["is_fallback"] is False
+
+
+@respx.mock
+def test_same_currency_unknown_code_is_not_passed_off_as_real(client):
+    respx.get(latest()).mock(return_value=httpx.Response(404, json={"message": "not found"}))
+    r = client.get(CONVERT, params={"amount": "250", "from": "ZZZ", "to": "ZZZ", "date": "2020-01-02"})
+    assert r.status_code == 400
+    assert r.json()["error"] == "unknown_currency"
+
+
+@respx.mock
+def test_same_currency_repeat_is_cached(client):
+    route = respx.get(latest()).mock(return_value=ok(today_iso()))
+    params = {"amount": "250", "from": "EUR", "to": "EUR", "date": "2020-01-02"}
+    client.get(CONVERT, params=params)
+    client.get(CONVERT, params=params)
+    assert route.call_count == 1              # identity goes through the cache too
 
 
 # ------------------------------------------------------------ upstream failures

@@ -37,6 +37,17 @@ the upstream's precision — rounding the rate first multiplies the error by the
 amount (0.85889 → 0.86 is 11.10 off on 10 000). `amount` must be positive with at
 most two decimal places.
 
+**Currency codes.** ISO 4217 codes are three ASCII letters, so a malformed one
+(empty, `EUROS`, `12`, `€`) is refused locally — otherwise every piece of garbage
+costs two upstream calls, the 404 and the probe that disambiguates it. Whether a
+*well-formed* code actually exists stays the upstream's judgement, not an
+assumption of mine. A same-currency conversion needs no rate lookup, since the
+rate is 1 by definition, but I still confirm the upstream recognises the code
+first: without that check `from=ZZZ&to=ZZZ` answered `200` with `rate: 1.0` and
+`source: ECB via frankfurter.dev`, presenting a currency that does not exist as
+though the ECB had priced it. That check runs through the same cache as any other
+question, so repeating it does not re-probe.
+
 **Cache.** Keyed by `(from, to, date)` — the three things that determine a rate.
 Dropping the date would let one day's rate be served for another, which is the
 exact failure this service exists to prevent. Only past dates are cached, because

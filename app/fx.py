@@ -49,21 +49,30 @@ async def _get(client: httpx.AsyncClient, url: str, params: dict) -> httpx.Respo
         )
 
 
-async def fetch_rate(
+async def _currency_is_known(code: str) -> bool:
+    """Ask the upstream whether it recognises this currency code at all."""
+    async with httpx.AsyncClient(timeout=UPSTREAM_TIMEOUT_SECONDS) as client:
+        response = await _get(client, f"{upstream_base()}/v1/latest", {"base": code})
+
+    if response.status_code == 200:
+        return True
+    if response.status_code == 404:
+        return False
+    if response.status_code >= 500:
+        raise FxError(
+            502, "upstream_error",
+            "The rate provider returned an error. Please try again shortly.",
+        )
+    raise FxError(
+        502, "upstream_bad_response",
+        "The rate provider returned an unexpected response.",
+    )
+
+
+async def _fetch_from_upstream(
     from_currency: str, to_currency: str, asked_date: str
 ) -> tuple[Decimal, str]:
-    """Ask the upstream for `from_currency -> to_currency` on `asked_date`.
-
-    Returns (rate, rate_date): the rate as a Decimal parsed straight from the
-    JSON text, and the date the rate ACTUALLY belongs to (upstream's `date`).
-    Any upstream failure is raised as an FxError, never guessed around.
-    """
-    key = (from_currency, to_currency, asked_date)
-    cached = cache.get(key)
-    if cached is not None:
-        # Same question already answered — do not ask the upstream again.
-        return cached
-
+    """The real rate lookup for two different currencies."""
     base = upstream_base()
     params = {"base": from_currency, "symbols": to_currency}
 
@@ -109,6 +118,38 @@ async def fetch_rate(
                 502, "upstream_bad_response",
                 "The rate provider returned an unreadable response.",
             )
+
+    return rate, rate_date
+
+
+async def fetch_rate(
+    from_currency: str, to_currency: str, asked_date: str
+) -> tuple[Decimal, str]:
+    """Return (rate, rate_date) for `from_currency -> to_currency` on a date.
+
+    `rate_date` is the day the rate ACTUALLY belongs to (the upstream's own
+    `date`), which on a weekend or holiday is earlier than `asked_date`. Any
+    upstream failure is raised as an FxError, never guessed around.
+    """
+    key = (from_currency, to_currency, asked_date)
+    cached = cache.get(key)
+    if cached is not None:
+        # Same question already answered — do not ask the upstream again.
+        return cached
+
+    if from_currency == to_currency:
+        # Converting a currency to itself needs no rate lookup: it is 1 by
+        # definition. But an unknown code must not be handed back as though it
+        # were a real currency, so confirm the upstream recognises it.
+        if not await _currency_is_known(from_currency):
+            raise FxError(
+                400, "unknown_currency", f"Unknown currency code: '{from_currency}'."
+            )
+        rate, rate_date = Decimal("1"), asked_date
+    else:
+        rate, rate_date = await _fetch_from_upstream(
+            from_currency, to_currency, asked_date
+        )
 
     # Cache only immutable answers: a past date's rate never changes, so we
     # remember it. Today's rate can still change when the ECB publishes, so we

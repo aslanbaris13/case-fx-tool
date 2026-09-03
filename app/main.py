@@ -37,7 +37,17 @@ async def convert(
     from_currency = from_currency.upper()
     to = to.upper()
 
-    # 1) amount: required, a valid number, positive, at most 2 decimal places.
+    # 1) currency codes: ISO 4217 codes are three ASCII letters. Rejecting the
+    #    malformed ones here spares the upstream two pointless calls; whether a
+    #    well-formed code actually exists stays the upstream's judgement.
+    for code in (from_currency, to):
+        if len(code) != 3 or not (code.isascii() and code.isalpha()):
+            raise FxError(
+                400, "unknown_currency",
+                f"'{code}' is not a valid currency code; expected three letters such as EUR.",
+            )
+
+    # 2) amount: required, a valid number, positive, at most 2 decimal places.
     #    Built from the string with Decimal so no float ever touches the money.
     if amount is None:
         raise FxError(400, "invalid_amount", "Amount is required.")
@@ -50,7 +60,7 @@ async def convert(
     if -amount_dec.as_tuple().exponent > 2:
         raise FxError(400, "invalid_amount", "Amount cannot have more than two decimal places.")
 
-    # 2) date: must be a real calendar date and not in the future.
+    # 3) date: must be a real calendar date and not in the future.
     try:
         asked = date_type.fromisoformat(date)
     except ValueError:
@@ -59,15 +69,8 @@ async def convert(
     if asked > today:
         raise FxError(400, "future_date", f"No rate exists yet for {date}; that date is in the future.")
 
-    # 3) same currency: the rate is 1 by definition — no upstream call needed.
-    if from_currency == to:
-        return {
-            "amount": float(amount_dec), "from": from_currency, "to": to,
-            "rate": 1.0, "result": float(amount_dec),
-            "rate_date": date, "asked_date": date,
-            "is_fallback": False, "note": None, "source": SOURCE,
-        }
-
+    # A same-currency conversion is handled inside fetch_rate, so that it goes
+    # through the same cache as every other question.
     rate, rate_date = await fx.fetch_rate(from_currency, to, date)
     result = fx.convert_amount(amount_dec, rate)
 

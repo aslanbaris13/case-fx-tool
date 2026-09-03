@@ -125,8 +125,8 @@ Every failure returns a non-2xx status and the same shape:
 | No rate published (weekend, holiday) | **200.** Answers with the most recent earlier rate, reports its true `rate_date`, sets `is_fallback: true` and explains it in `note`. |
 | Date in the future | **400 `future_date`**, decided locally before any upstream call. |
 | Date before the series starts | **400 `before_series`**. |
-| Unknown currency code | **400 `unknown_currency`**. |
-| `from` equals `to` | **200** with `rate: 1.0` and `result` equal to `amount`; no upstream call. |
+| Unknown currency code | **400 `unknown_currency`**. A malformed code (empty, `EUROS`, `12`, `€`) is refused locally, without troubling the upstream. |
+| `from` equals `to` | **200** with `rate: 1.0` and `result` equal to `amount` — the rate is 1 by definition, so no rate is looked up. The code is still checked against the upstream, so an unknown one is not passed off as real. |
 | Upstream is slow | **504 `upstream_timeout`** once the 10s timeout expires. |
 | Upstream returns 500 | **502 `upstream_error`**. No rate is invented. |
 | Upstream returns non-JSON | **502 `upstream_bad_response`**. |
