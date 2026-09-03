@@ -1,7 +1,7 @@
 """FastAPI application entry point for the FX conversion tool.
 
-Exposes /tools/convert, the single endpoint an AI agent calls as a tool.
-This step adds local input validation; upstream-failure handling comes next.
+Exposes exactly one endpoint, /tools/convert — the single tool an AI agent
+calls to convert an amount between two currencies on a given date.
 """
 
 from datetime import date as date_type, datetime, timezone
@@ -19,12 +19,6 @@ app.add_exception_handler(FxError, fx_error_handler)
 app.add_exception_handler(RequestValidationError, validation_error_handler)
 
 SOURCE = "ECB via frankfurter.dev"
-
-
-@app.get("/health")
-def health() -> dict:
-    """Liveness check — used to confirm the service is up."""
-    return {"status": "ok"}
 
 
 @app.get("/tools/convert")
