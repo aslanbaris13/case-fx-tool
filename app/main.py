@@ -9,11 +9,14 @@ from decimal import Decimal, InvalidOperation
 
 from fastapi import FastAPI, Query
 
+from fastapi.exceptions import RequestValidationError
+
 from app import fx
-from app.errors import FxError, fx_error_handler
+from app.errors import FxError, fx_error_handler, validation_error_handler
 
 app = FastAPI(title="fx-tool", version="0.1.0")
 app.add_exception_handler(FxError, fx_error_handler)
+app.add_exception_handler(RequestValidationError, validation_error_handler)
 
 SOURCE = "ECB via frankfurter.dev"
 

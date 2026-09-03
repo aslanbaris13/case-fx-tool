@@ -101,6 +101,14 @@ def test_bad_date_rejected(client):
     assert r.json()["error"] == "invalid_date"
 
 
+def test_missing_required_param_uses_our_error_shape(client):
+    # A missing required param must not leak FastAPI's default 422 body.
+    r = client.get(CONVERT, params={"amount": "250", "from": "EUR", "date": "2020-01-02"})
+    assert r.status_code == 400
+    assert r.json()["error"] == "invalid_request"
+    assert "to" in r.json()["message"]
+
+
 @respx.mock
 def test_future_date_rejected_without_upstream(client):
     # No route registered: if the code called the upstream, respx would raise.
