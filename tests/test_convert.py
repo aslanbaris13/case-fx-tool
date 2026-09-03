@@ -192,6 +192,14 @@ def test_upstream_timeout(client):
 
 
 @respx.mock
+def test_upstream_unreachable(client):
+    respx.get(dated("2020-01-02")).mock(side_effect=httpx.ConnectError("refused"))
+    r = client.get(CONVERT, params={"amount": "250", "from": "EUR", "to": "TRY", "date": "2020-01-02"})
+    assert r.status_code == 502
+    assert r.json()["error"] == "upstream_unreachable"
+
+
+@respx.mock
 def test_upstream_non_json(client):
     respx.get(dated("2020-01-02")).mock(return_value=httpx.Response(200, text="<html>nope</html>"))
     r = client.get(CONVERT, params={"amount": "250", "from": "EUR", "to": "TRY", "date": "2020-01-02"})
